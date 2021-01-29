@@ -464,7 +464,8 @@ stan_surv <- function(formula,
                       prior_covariance = decov(),
                       prior_PD         = FALSE,
                       algorithm        = c("sampling", "meanfield", "fullrank"),
-                      adapt_delta      = 0.95, ...) {
+                      adapt_delta      = 0.95,
+                      delayed_entry=NA, ...) {
 
   #-----------------------------
   # Pre-processing of arguments
@@ -498,7 +499,7 @@ stan_surv <- function(formula,
   #----- dimensions and response vectors
   
   # entry and exit times for each row of data
-  t_beg <- make_t(mf, type = "beg") # entry time
+  t_beg <- make_t(mf, type = "beg", entry=delayed_entry) # entry time
   t_end <- make_t(mf, type = "end") # exit  time
   t_upp <- make_t(mf, type = "upp") # upper time for interval censoring
   
@@ -2113,18 +2114,22 @@ reformulate_rhs <- function(x) {
 #          would have been the lower limit of the interval, and "upp" 
 #          is the upper limit of the interval.
 # @return A numeric vector.
-make_t <- function(model_frame, type = c("beg", "end", "gap", "upp")) {
+make_t <- function(model_frame, type = c("beg", "end", "gap", "upp"), entry=NA) {
   
   type <- match.arg(type)
   resp <- if (survival::is.Surv(model_frame)) 
     model_frame else model.response(model_frame)
   surv <- attr(resp, "type")
   err  <- paste0("Bug found: cannot handle '", surv, "' Surv objects.")
+
+  if (!is.na(entry) & length(entry)!=nrow(model_frame)){
+    stop("Length of `delayed_entry` must equal rows in data")
+  }
   
   t_beg <- switch(surv,
                   "right"     = rep(0, nrow(model_frame)),
-                  "interval"  = rep(0, nrow(model_frame)),
-                  "interval2" = rep(0, nrow(model_frame)),
+                  "interval"  = ifelse(!is.na(entry), entry, rep(0, nrow(model_frame))),
+                  "interval2" = ifelse(!is.na(entry), entry, rep(0, nrow(model_frame))),
                   "counting"  = as.vector(resp[, "start"]),
                   stop(err))
 
